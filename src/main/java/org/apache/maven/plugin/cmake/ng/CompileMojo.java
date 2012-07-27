@@ -21,14 +21,16 @@ import org.apache.maven.plugin.MojoExecutionException;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.LinkedList;
+import java.util.List;
 
 /**
- * Goal which removes existing build products.
+ * Goal which builds the native sources
  *
- * @goal clean
- * @phase clean
+ * @goal compile
+ * @phase compile
  */
-public class CleanMojo extends AbstractMojo {
+public class CompileMojo extends AbstractMojo {
   /**
    * Location of the build products.
    *
@@ -37,23 +39,39 @@ public class CleanMojo extends AbstractMojo {
    */
   private File output;
 
-  void recursiveDelete(File f) throws IOException {
-    if (f.isDirectory()) {
-      for (File c : f.listFiles()) {
-        recursiveDelete(c);
-      }
-    }
-    if (!f.delete()) {
-      throw new IOException("Failed to delete file: " + f);
-    }
-  }
+  /**
+   * Build target.
+   *
+   * @parameter expression="${target}"
+   */
+  private String target;
 
   public void execute() throws MojoExecutionException {
+    Utils.validatePlatform();
+
+    List<String> cmd = new LinkedList<String>();
+    cmd.add("make");
+    cmd.add("VERBOSE=1");
+    if (target != null) {
+      cmd.add(target);
+    }
+    ProcessBuilder pb = new ProcessBuilder(cmd);
+    pb.directory(output);
+    Process proc = null;
+    int retCode = -1;
     try {
-      recursiveDelete(output);
+      proc = pb.start();
+      retCode = proc.waitFor();
+      if (retCode != 0) {
+        throw new MojoExecutionException("make failed with error code " +
+            retCode);
+      }
+    } catch (InterruptedException e) {
+      throw new MojoExecutionException("Interrupted during Process#waitFor", e);
     } catch (IOException e) {
-      throw new MojoExecutionException("Error removing output directory '" +
-          output + "'", e);
+      throw new MojoExecutionException("Error executing make", e);
+    } finally {
+      proc.destroy();
     }
   }
 }
