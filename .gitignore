@@ -4,6 +4,7 @@
 *.swp
 .idea
 .svn
+.metadata
 .classpath
 .project
 .settings
