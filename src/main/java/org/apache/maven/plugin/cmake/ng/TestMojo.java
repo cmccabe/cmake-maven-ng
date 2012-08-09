@@ -86,6 +86,14 @@ public class TestMojo extends AbstractMojo {
   private File results;
 
   /**
+   * What result to expect from the test
+   *
+   * @parameter expression="${expectedResult}" default-value="success"
+   *            Can be either "success", "failure", or "any".
+   */
+  private String expectedResult;
+  
+  /**
    * The test thread waits for the process to terminate.
    *
    * Since Process#waitFor doesn't take a timeout argument, we simulate one by
@@ -177,17 +185,28 @@ public class TestMojo extends AbstractMojo {
   void writeStatusFile(String status) throws IOException {
     FileOutputStream fos = new FileOutputStream(new File(results,
                 testName + ".status"));
+    BufferedWriter out = null;
     try {
-      BufferedWriter out = new BufferedWriter(new OutputStreamWriter(fos));
+      out = new BufferedWriter(new OutputStreamWriter(fos));
       out.write(status + "\n");
     } finally {
-      fos.close();
+      if (out != null) {
+        out.close();
+      } else {
+        fos.close();
+      }
     }
   }
 
   public void execute() throws MojoExecutionException {
     Utils.validatePlatform();
 
+    if (!(expectedResult.equals("success") ||
+        expectedResult.equals("failure") ||
+        expectedResult.equals("any"))) {
+      throw new MojoExecutionException("expectedResult must be either " +
+          "success, failure, or any");
+    }
     if (!binary.exists()) {
       throw new MojoExecutionException("Test " + binary +
           " was not built!  (File does not exist.)");
@@ -241,6 +260,9 @@ public class TestMojo extends AbstractMojo {
       throw new MojoExecutionException("Interrupted while executing " + 
           "the test " + testName, e);
     } finally {
+      System.out.println("testThread = " + testThread +
+          ", retCode = " + retCode + ", proc = " + proc +
+          ", errThread = " + errThread + ", outThread = " + outThread);
       if (testThread != null) {
         // If the test thread didn't exit yet, that means the timeout expired.
         testThread.interrupt();
@@ -286,13 +308,18 @@ public class TestMojo extends AbstractMojo {
       }
     }
     if (status.equals("TIMED_OUT")) {
-      throw new MojoExecutionException("Test " + binary +
-          " timed out after " + timeout + " seconds!");
+      if (expectedResult.equals("success")) {
+        throw new MojoExecutionException("Test " + binary +
+            " timed out after " + timeout + " seconds!");
+      }
     } else if (!status.equals("SUCCESS")) {
-      // TODO: do we need to do something special here to handle the case where
-      // we're doing mvn --ff or never-fail, etc.?  Probably not...
+      if (!expectedResult.equals("failure")) {
+        throw new MojoExecutionException("Test " + binary +
+            " returned " + status);
+      }
+    } else if (expectedResult.equals("failure")) {
       throw new MojoExecutionException("Test " + binary +
-          " returned " + status);
+          " succeeded, but we expected failure!");
     }
   }
 }
