@@ -19,8 +19,11 @@ package org.apache.maven.plugin.cmake.ng;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -76,13 +79,34 @@ public class GenerateMojo extends AbstractMojo {
    */
   private Map<String, String> vars;
 
+  private static class RedirectorThread extends Thread {
+    private BufferedReader rd;
+
+    public RedirectorThread(InputStream rd) {
+      this.rd = new BufferedReader(new InputStreamReader(rd));
+    }
+    
+    @Override
+    public void run() {
+      try {
+        String line = rd.readLine();
+        while((line != null) && !isInterrupted()) {
+          System.out.println(line);
+          line = rd.readLine();
+        }
+      } catch (IOException e) {
+      }
+    }
+  }
+
   public void execute() throws MojoExecutionException {
     Utils.validatePlatform();
     Utils.validateParams(output, source);
 
+    output.mkdirs();
     List<String> cmd = new LinkedList<String>();
     cmd.add("cmake");
-    cmd.add(output.getAbsolutePath());
+    cmd.add(source.getAbsolutePath());
     for (Map.Entry<String, String> entry : vars.entrySet()) {
       if (entry.getValue().equals("")) {
         cmd.add("-D" + entry.getKey());
@@ -92,13 +116,26 @@ public class GenerateMojo extends AbstractMojo {
     }
     cmd.add("-G");
     cmd.add("Unix Makefiles");
+    String prefix = "";
+    StringBuilder bld = new StringBuilder();
+    for (String c : cmd) {
+      bld.append(prefix);
+      bld.append("'").append(c).append("'");
+      prefix = " ";
+    }
+    System.out.println("Running " + bld.toString());
     ProcessBuilder pb = new ProcessBuilder(cmd);
     pb.directory(output);
+    pb.redirectErrorStream(true);
     Utils.addEnvironment(pb, env);
     Process proc = null;
+    RedirectorThread stdoutThread = null;
     int retCode = -1;
     try {
       proc = pb.start();
+      stdoutThread = new RedirectorThread(proc.getInputStream());
+      stdoutThread.start();
+
       retCode = proc.waitFor();
       if (retCode != 0) {
         throw new MojoExecutionException("CMake failed with error code " +
@@ -110,7 +147,16 @@ public class GenerateMojo extends AbstractMojo {
       throw new MojoExecutionException("Interrupted while waiting for " +
           "CMake process", e);
     } finally {
-      proc.destroy();
+      if (proc != null) {
+        proc.destroy();
+      }
+      if (stdoutThread != null) {
+        try {
+          stdoutThread.join();
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        }
+      }
     }
   }
 }
