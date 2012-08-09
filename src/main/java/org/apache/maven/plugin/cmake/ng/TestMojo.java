@@ -81,10 +81,24 @@ public class TestMojo extends AbstractMojo {
   /**
    * Path to results directory.
    *
-   * @parameter expression="${results}" default-value="./cmake-ng-results"
+   * @parameter expression="${results}" default-value="cmake-ng-results"
    */
   private File results;
 
+  /**
+   * A list of preconditions which must be true for this test to be run.
+   *
+   * @parameter expression="${preconditions}"
+   */
+  private List<Boolean> preconditions;
+
+  /**
+   * If true, pass over the test without an error if the binary is missing.
+   *
+   * @parameter expression="${skipIfMissing}" default-value="false"
+   */
+  private boolean skipIfMissing;
+  
   /**
    * What result to expect from the test
    *
@@ -201,6 +215,9 @@ public class TestMojo extends AbstractMojo {
   public void execute() throws MojoExecutionException {
     Utils.validatePlatform();
 
+    if (testName == null) {
+      testName = binary.getName();
+    }
     if (!(expectedResult.equals("success") ||
         expectedResult.equals("failure") ||
         expectedResult.equals("any"))) {
@@ -208,17 +225,28 @@ public class TestMojo extends AbstractMojo {
           "success, failure, or any");
     }
     if (!binary.exists()) {
-      throw new MojoExecutionException("Test " + binary +
-          " was not built!  (File does not exist.)");
+      if (skipIfMissing) {
+        System.out.println("Skipping missing test " + testName);
+        return;
+      } else {
+        throw new MojoExecutionException("Test " + binary +
+            " was not built!  (File does not exist.)");
+      }
     }
+    if (preconditions != null) {
+      for (Boolean b : preconditions) {
+        if (!b) {
+          System.out.println("Skipping test " + testName);
+          return;
+        }
+      }
+    }
+
     if (!results.isDirectory()) {
       if (!results.mkdirs()) {
         throw new MojoExecutionException("Failed to create " +
             "output directory '" + results + "'!");
       }
-    }
-    if (testName == null) {
-      testName = binary.getName();
     }
     List<String> cmd = new LinkedList<String>();
     cmd.add(binary.getAbsolutePath());
@@ -250,9 +278,11 @@ public class TestMojo extends AbstractMojo {
       testThread = new TestThread(proc);
       testThread.start();
       testThread.join(timeout * 1000);
-      retCode = testThread.retCode();
-      testThread = null;
-      proc = null;
+      if (!testThread.isAlive()) {
+        retCode = testThread.retCode();
+        testThread = null;
+        proc = null;
+      }
     } catch (IOException e) {
       throw new MojoExecutionException("IOException while executing the test " +
           testName, e);
@@ -313,7 +343,7 @@ public class TestMojo extends AbstractMojo {
             " timed out after " + timeout + " seconds!");
       }
     } else if (!status.equals("SUCCESS")) {
-      if (!expectedResult.equals("failure")) {
+      if (expectedResult.equals("success")) {
         throw new MojoExecutionException("Test " + binary +
             " returned " + status);
       }
