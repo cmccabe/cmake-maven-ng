@@ -67,7 +67,11 @@ public class Utils {
   static void addEnvironment(ProcessBuilder pb, Map<String, String> env) {
     Map<String, String> processEnv = pb.environment();
     for (Map.Entry<String, String> entry : env.entrySet()) {
-      processEnv.put(entry.getValue(), entry.getKey());
+      String val = entry.getValue();
+      if (val == null) {
+        val = "";
+      }
+      processEnv.put(entry.getKey(), val);
     }
   }
 }

@@ -254,7 +254,9 @@ public class TestMojo extends AbstractMojo {
       cmd.add(entry);
     }
     ProcessBuilder pb = new ProcessBuilder(cmd);
-    Utils.addEnvironment(pb, env);
+    if (env != null) {
+      Utils.addEnvironment(pb, env);
+    }
     Process proc = null;
     TestThread testThread = null;
     Thread errThread = null, outThread = null;
