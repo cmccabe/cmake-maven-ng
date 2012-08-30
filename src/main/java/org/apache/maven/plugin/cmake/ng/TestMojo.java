@@ -229,7 +229,7 @@ public class TestMojo extends AbstractMojo {
   }
 
   final private String VALID_PRECONDITION_TYPES_STR =
-      "Valid precondition types are \"and\", \"and_not\"";
+      "Valid precondition types are \"and\", \"andNot\"";
   
   public void execute() throws MojoExecutionException {
     Utils.validatePlatform();
@@ -266,7 +266,7 @@ public class TestMojo extends AbstractMojo {
                 " because precondition number " + idx + " was not met.");
             return;
           }
-        } else if (key.equals("andnot")) {
+        } else if (key.equals("andNot")) {
           if (isTruthy(val)) {
             System.out.println("Skipping test " + testName +
                 " because negative precondition number " + idx +
