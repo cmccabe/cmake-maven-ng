@@ -108,9 +108,7 @@ public class GenerateMojo extends AbstractMojo {
     cmd.add("cmake");
     cmd.add(source.getAbsolutePath());
     for (Map.Entry<String, String> entry : vars.entrySet()) {
-      if ((entry.getValue() == null) || (entry.getValue().equals(""))) {
-        cmd.add("-D" + entry.getKey());
-      } else {
+      if ((entry.getValue() != null) && (!entry.getValue().equals(""))) {
         cmd.add("-D" + entry.getKey() + "=" + entry.getValue());
       }
     }

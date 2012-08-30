@@ -90,7 +90,7 @@ public class TestMojo extends AbstractMojo {
    *
    * @parameter expression="${preconditions}"
    */
-  private List<Boolean> preconditions;
+  private Map<String, String> preconditions;
 
   /**
    * If true, pass over the test without an error if the binary is missing.
@@ -196,7 +196,7 @@ public class TestMojo extends AbstractMojo {
    * numerical code if it returned a non-zero status, or IN_PROGRESS or
    * TIMED_OUT.
    */
-  void writeStatusFile(String status) throws IOException {
+  private void writeStatusFile(String status) throws IOException {
     FileOutputStream fos = new FileOutputStream(new File(results,
                 testName + ".status"));
     BufferedWriter out = null;
@@ -212,6 +212,25 @@ public class TestMojo extends AbstractMojo {
     }
   }
 
+  private static boolean isTruthy(String str) {
+    if (str == null)
+      return false;
+    if (str.equalsIgnoreCase(""))
+      return false;
+    if (str.equalsIgnoreCase("false"))
+      return false;
+    if (str.equalsIgnoreCase("no"))
+      return false;
+    if (str.equalsIgnoreCase("off"))
+      return false;
+    if (str.equalsIgnoreCase("disable"))
+      return false;
+    return true;
+  }
+
+  final private String VALID_PRECONDITION_TYPES_STR =
+      "Valid precondition types are \"and\", \"and_not\"";
+  
   public void execute() throws MojoExecutionException {
     Utils.validatePlatform();
 
@@ -234,11 +253,31 @@ public class TestMojo extends AbstractMojo {
       }
     }
     if (preconditions != null) {
-      for (Boolean b : preconditions) {
-        if (!b) {
-          System.out.println("Skipping test " + testName);
-          return;
+      int idx = 1;
+      for (Map.Entry<String, String> entry : preconditions.entrySet()) {
+        String key = entry.getKey();
+        String val = entry.getValue();
+        if (key == null) {
+          throw new MojoExecutionException("NULL is not a valid " +
+          		"precondition type.  " + VALID_PRECONDITION_TYPES_STR);
+        } if (key.equals("and")) {
+          if (!isTruthy(val)) {
+            System.out.println("Skipping test " + testName +
+                " because precondition number " + idx + " was not met.");
+            return;
+          }
+        } else if (key.equals("andnot")) {
+          if (isTruthy(val)) {
+            System.out.println("Skipping test " + testName +
+                " because negative precondition number " + idx +
+                " was met.");
+            return;
+          }
+        } else {
+          throw new MojoExecutionException(key + " is not a valid " +
+          		"precondition type.  " + VALID_PRECONDITION_TYPES_STR);
         }
+        idx++;
       }
     }
 
