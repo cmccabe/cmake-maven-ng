@@ -16,6 +16,7 @@ package org.apache.maven.plugin.cmake.ng;
  * limitations under the License.
  */
 
+import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 
@@ -107,6 +108,15 @@ public class TestMojo extends AbstractMojo {
    */
   private String expectedResult;
   
+  /**
+   * The Maven Session Object
+   *
+   * @parameter expression="${session}"
+   * @required
+   * @readonly
+   */
+  private MavenSession session; 
+   
   /**
    * The test thread waits for the process to terminate.
    *
@@ -228,30 +238,58 @@ public class TestMojo extends AbstractMojo {
     return true;
   }
 
+  
   final private String VALID_PRECONDITION_TYPES_STR =
       "Valid precondition types are \"and\", \"andNot\"";
   
-  public void execute() throws MojoExecutionException {
-    Utils.validatePlatform();
-
-    if (testName == null) {
-      testName = binary.getName();
-    }
+  /**
+   * Validate the parameters that the user has passed.
+   * @throws MojoExecutionException 
+   */
+  private void validateParameters() throws MojoExecutionException {
     if (!(expectedResult.equals("success") ||
         expectedResult.equals("failure") ||
         expectedResult.equals("any"))) {
       throw new MojoExecutionException("expectedResult must be either " +
           "success, failure, or any");
     }
+  }
+  
+  private boolean shouldRunTest() throws MojoExecutionException {
+    // Were we told to skip all tests?
+    String skipTests = session.
+        getExecutionProperties().getProperty("skipTests");
+    if (isTruthy(skipTests)) {
+      return false;
+    }
+    // Does the binary exist?  If not, we shouldn't try to run it.
     if (!binary.exists()) {
       if (skipIfMissing) {
         System.out.println("Skipping missing test " + testName);
-        return;
+        return false;
       } else {
         throw new MojoExecutionException("Test " + binary +
             " was not built!  (File does not exist.)");
       }
     }
+    // If there is an explicit list of tests to run, it should include this 
+    // test.
+    String testProp = session.
+        getExecutionProperties().getProperty("test");
+    if (testProp != null) {
+      String testPropArr[] = testProp.split(",");
+      boolean found = false;
+      for (String test : testPropArr) {
+        if (test.equals(testName)) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        return false;
+      }
+    }
+    // Are all the preconditions satistfied?
     if (preconditions != null) {
       int idx = 1;
       for (Map.Entry<String, String> entry : preconditions.entrySet()) {
@@ -264,14 +302,14 @@ public class TestMojo extends AbstractMojo {
           if (!isTruthy(val)) {
             System.out.println("Skipping test " + testName +
                 " because precondition number " + idx + " was not met.");
-            return;
+            return false;
           }
         } else if (key.equals("andNot")) {
           if (isTruthy(val)) {
             System.out.println("Skipping test " + testName +
                 " because negative precondition number " + idx +
                 " was met.");
-            return;
+            return false;
           }
         } else {
           throw new MojoExecutionException(key + " is not a valid " +
@@ -280,7 +318,19 @@ public class TestMojo extends AbstractMojo {
         idx++;
       }
     }
-
+    // OK, we should run this.
+    return true;
+  }
+  
+  public void execute() throws MojoExecutionException {
+    if (testName == null) {
+      testName = binary.getName();
+    }
+    Utils.validatePlatform();
+    validateParameters();
+    if (!shouldRunTest()) {
+      return;
+    }
     if (!results.isDirectory()) {
       if (!results.mkdirs()) {
         throw new MojoExecutionException("Failed to create " +
