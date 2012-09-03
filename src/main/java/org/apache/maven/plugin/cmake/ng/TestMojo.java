@@ -260,6 +260,7 @@ public class TestMojo extends AbstractMojo {
     String skipTests = session.
         getExecutionProperties().getProperty("skipTests");
     if (isTruthy(skipTests)) {
+      System.out.println("skipTests is in effect for test " + testName);
       return false;
     }
     // Does the binary exist?  If not, we shouldn't try to run it.
@@ -286,6 +287,8 @@ public class TestMojo extends AbstractMojo {
         }
       }
       if (!found) {
+        System.out.println("did not find test '" + testName + "' in "
+             + "list " + testProp);
         return false;
       }
     }
