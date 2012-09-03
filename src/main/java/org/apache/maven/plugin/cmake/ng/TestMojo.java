@@ -19,16 +19,13 @@ package org.apache.maven.plugin.cmake.ng;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugin.cmake.ng.Utils.OutputToFileThread;
 
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
-import java.io.Writer;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -144,60 +141,6 @@ public class TestMojo extends AbstractMojo {
     }
   }
 
-  /**
-   * Redirect a pipe to a file.
-   * 
-   * Java 5 and 6 don't offer a way to redirect ProcessBuilder's stdout and
-   * stderr to a file.  Instead, they give you a way to access the output as
-   * a pipe.  However, a thread can redirect 
-   * the output to a file
-   * 
-   * @author cmccabe
-   *
-   */
-  private static class RedirectorThread extends Thread {
-    private BufferedReader rd;
-    private Writer wr;
-    
-    public RedirectorThread(InputStream rd, File outFile) 
-        throws IOException {
-      FileOutputStream fos = new FileOutputStream(outFile);
-      try {
-        this.wr = new BufferedWriter(new OutputStreamWriter(fos));
-        this.rd = new BufferedReader(new InputStreamReader(rd));
-        fos = null;
-      } finally {
-        if (fos != null) {
-          fos.close();
-        }
-      }
-    }
-    
-    @Override
-    public void run() {
-      try {
-        String line = rd.readLine();
-        while((line != null) && !isInterrupted()) {
-          wr.append(line);
-          wr.append(System.getProperty("line.separator"));
-          line = rd.readLine();
-        }
-      } catch(IOException ioe) {
-      } finally {
-        try {
-          wr.close();
-        } catch (IOException e) {
-          e.printStackTrace(System.err);
-        }
-        try {
-          rd.close();
-        } catch (IOException e) {
-          e.printStackTrace(System.err);
-        }
-      }
-    }
-  }
-  
   /**
    * Write to the status file.
    *
@@ -351,7 +294,7 @@ public class TestMojo extends AbstractMojo {
     }
     Process proc = null;
     TestThread testThread = null;
-    Thread errThread = null, outThread = null;
+    OutputToFileThread errThread = null, outThread = null;
     int retCode = -1;
     String status = "IN_PROGRESS";
     try {
@@ -361,12 +304,12 @@ public class TestMojo extends AbstractMojo {
     }
     try {
       proc = pb.start();
-      errThread = new RedirectorThread(proc.getErrorStream(),
+      errThread = new OutputToFileThread(proc.getErrorStream(),
           new File(results, testName + ".stderr"));
       errThread.start();
       // Process#getInputStream gets the stdout stream of the process, which 
       // acts as an input to us.
-      outThread = new RedirectorThread(proc.getInputStream(),
+      outThread = new OutputToFileThread(proc.getInputStream(),
           new File(results, testName + ".stdout"));
       outThread.start();
       testThread = new TestThread(proc);
@@ -416,19 +359,23 @@ public class TestMojo extends AbstractMojo {
       // some output.
       if (errThread != null) {
         try {
+          errThread.interrupt();
           errThread.join();
         } catch (InterruptedException e) {
           System.err.println("Interrupted while waiting for errThread");
           e.printStackTrace(System.err);
         }
+        errThread.close();
       }
       if (outThread != null) {
         try {
+          outThread.interrupt();
           outThread.join();
         } catch (InterruptedException e) {
           System.err.println("Interrupted while waiting for outThread");
           e.printStackTrace(System.err);
         }
+        outThread.close();
       }
     }
     if (status.equals("TIMED_OUT")) {

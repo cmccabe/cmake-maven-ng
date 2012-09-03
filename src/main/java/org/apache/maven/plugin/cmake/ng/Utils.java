@@ -19,6 +19,7 @@ package org.apache.maven.plugin.cmake.ng;
 import org.apache.maven.plugin.MojoExecutionException;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -109,10 +110,12 @@ public class Utils {
           bufs.push(arr2);
         }
       } catch (IOException e) {
+        e.printStackTrace();
       } finally {
         try {
           reader.close();
         } catch (IOException e) {
+          e.printStackTrace();
         }
       }
     }
@@ -120,6 +123,58 @@ public class Utils {
     public void printBufs() {
       for (char[] b : bufs) {
         System.out.print(b);
+      }
+    }
+  }
+
+  /**
+   * This thread reads the output of the a subprocess and writes it to a
+   * thread.  There is an easier way to do this in Java 7, but we want to stay
+   * compatible with old JDK versions.
+   */
+  public static class OutputToFileThread extends Thread {
+    private InputStream is;
+    private FileOutputStream out;
+
+    public OutputToFileThread(InputStream is, File outFile) 
+        throws IOException {
+      this.is = is;
+      this.out = new FileOutputStream(outFile);
+    }
+
+    public void run() {
+      byte[] arr = new byte[8192];
+      try {
+        while (true) {
+          int amt = is.read(arr);
+          if (amt < 0) return;
+          out.write(arr, 0, amt);
+        }
+      } catch (IOException e) {
+        e.printStackTrace();
+      } finally {
+        close();
+      }
+    }
+
+    public void close() {
+      if (is != null) {
+        try {
+          is.close();
+        } catch (IOException e) {
+          e.printStackTrace();
+        } finally {
+          is = null;
+        }
+      }
+      if (out != null) {
+        try {
+          out.close();
+        } catch (IOException e) {
+          e.printStackTrace();
+        } finally {
+          out = null;
+        }
       }
     }
   }
