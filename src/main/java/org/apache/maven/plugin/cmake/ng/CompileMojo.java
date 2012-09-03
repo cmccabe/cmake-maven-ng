@@ -18,9 +18,11 @@ package org.apache.maven.plugin.cmake.ng;
 
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugin.cmake.ng.Utils.OutputBufferThread;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -56,11 +58,15 @@ public class CompileMojo extends AbstractMojo {
       cmd.add(target);
     }
     ProcessBuilder pb = new ProcessBuilder(cmd);
+    pb.redirectErrorStream(true);
     pb.directory(output);
     Process proc = null;
     int retCode = -1;
+    OutputBufferThread outThread = null;
     try {
       proc = pb.start();
+      outThread = new OutputBufferThread(proc.getInputStream());
+      outThread.start();
       retCode = proc.waitFor();
       if (retCode != 0) {
         throw new MojoExecutionException("make failed with error code " +
@@ -71,6 +77,17 @@ public class CompileMojo extends AbstractMojo {
     } catch (IOException e) {
       throw new MojoExecutionException("Error executing make", e);
     } finally {
+      if (outThread != null) {
+        outThread.interrupt();
+        try {
+          outThread.join();
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        }
+        if (retCode != 0) {
+          outThread.printBufs();
+        }
+      }
       proc.destroy();
     }
   }

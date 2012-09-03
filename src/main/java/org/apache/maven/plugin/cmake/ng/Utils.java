@@ -20,6 +20,9 @@ import org.apache.maven.plugin.MojoExecutionException;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.LinkedList;
 import java.util.Map;
 
 /**
@@ -72,6 +75,52 @@ public class Utils {
         val = "";
       }
       processEnv.put(entry.getKey(), val);
+    }
+  }
+
+  /**
+   * This thread reads the output of the a subprocess and buffers it.
+   *
+   * Note that because of the way the Java Process APIs are designed, even
+   * if we didn't intend to ever display this output, we still would
+   * have to read it.  We are connected to the subprocess via a blocking pipe,
+   * and if we stop draining our end of the pipe, the subprocess will
+   * eventually be blocked if it writes enough to stdout/stderr.
+   */
+  public static class OutputBufferThread extends Thread {
+    private InputStreamReader reader;
+    private LinkedList<char[]> bufs;
+    
+    public OutputBufferThread(InputStream is) {
+      this.reader = new InputStreamReader(is);
+      this.bufs = new LinkedList<char[]>();
+    }
+
+    public void run() {
+      try {
+        char[] arr = new char[8192];
+        while (true) {
+          int amt = reader.read(arr);
+          if (amt < 0) return;
+          char[] arr2 = new char[amt];
+          for (int i = 0; i < amt; i++) {
+            arr2[i] = arr[i];
+          }
+          bufs.push(arr2);
+        }
+      } catch (IOException e) {
+      } finally {
+        try {
+          reader.close();
+        } catch (IOException e) {
+        }
+      }
+    }
+
+    public void printBufs() {
+      for (char[] b : bufs) {
+        System.out.print(b);
+      }
     }
   }
 }

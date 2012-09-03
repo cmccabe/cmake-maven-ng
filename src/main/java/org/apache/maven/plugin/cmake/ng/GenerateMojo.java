@@ -18,6 +18,7 @@ package org.apache.maven.plugin.cmake.ng;
 
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugin.cmake.ng.Utils.OutputBufferThread;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -79,26 +80,6 @@ public class GenerateMojo extends AbstractMojo {
    */
   private Map<String, String> vars;
 
-  private static class RedirectorThread extends Thread {
-    private BufferedReader rd;
-
-    public RedirectorThread(InputStream rd) {
-      this.rd = new BufferedReader(new InputStreamReader(rd));
-    }
-    
-    @Override
-    public void run() {
-      try {
-        String line = rd.readLine();
-        while((line != null) && !isInterrupted()) {
-          System.out.println(line);
-          line = rd.readLine();
-        }
-      } catch (IOException e) {
-      }
-    }
-  }
-
   public void execute() throws MojoExecutionException {
     Utils.validatePlatform();
     Utils.validateParams(output, source);
@@ -127,12 +108,12 @@ public class GenerateMojo extends AbstractMojo {
     pb.redirectErrorStream(true);
     Utils.addEnvironment(pb, env);
     Process proc = null;
-    RedirectorThread stdoutThread = null;
+    OutputBufferThread outThread = null;
     int retCode = -1;
     try {
       proc = pb.start();
-      stdoutThread = new RedirectorThread(proc.getInputStream());
-      stdoutThread.start();
+      outThread = new OutputBufferThread(proc.getInputStream());
+      outThread.start();
 
       retCode = proc.waitFor();
       if (retCode != 0) {
@@ -148,11 +129,15 @@ public class GenerateMojo extends AbstractMojo {
       if (proc != null) {
         proc.destroy();
       }
-      if (stdoutThread != null) {
+      if (outThread != null) {
         try {
-          stdoutThread.join();
+          outThread.interrupt();
+          outThread.join();
         } catch (InterruptedException e) {
           e.printStackTrace();
+        }
+        if (retCode != 0) {
+          outThread.printBufs();
         }
       }
     }
