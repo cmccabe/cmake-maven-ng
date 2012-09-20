@@ -38,6 +38,8 @@ public class CleanMojo extends AbstractMojo {
   private File output;
 
   void recursiveDelete(File f) throws IOException {
+    if (!f.exists())
+      return;
     if (f.isDirectory()) {
       for (File c : f.listFiles()) {
         recursiveDelete(c);
