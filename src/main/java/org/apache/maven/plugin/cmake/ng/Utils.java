@@ -23,6 +23,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.Map;
 
@@ -90,11 +91,11 @@ public class Utils {
    */
   public static class OutputBufferThread extends Thread {
     private InputStreamReader reader;
-    private LinkedList<char[]> bufs;
+    private ArrayList<char[]> bufs;
     
     public OutputBufferThread(InputStream is) {
       this.reader = new InputStreamReader(is);
-      this.bufs = new LinkedList<char[]>();
+      this.bufs = new ArrayList<char[]>();
     }
 
     public void run() {
@@ -107,7 +108,7 @@ public class Utils {
           for (int i = 0; i < amt; i++) {
             arr2[i] = arr[i];
           }
-          bufs.push(arr2);
+          bufs.add(arr2);
         }
       } catch (IOException e) {
         e.printStackTrace();

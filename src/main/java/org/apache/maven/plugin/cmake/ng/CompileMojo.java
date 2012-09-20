@@ -57,15 +57,16 @@ public class CompileMojo extends AbstractMojo {
       cmd.add(target);
     }
     ProcessBuilder pb = new ProcessBuilder(cmd);
-    pb.redirectErrorStream(true);
     pb.directory(output);
     Process proc = null;
     int retCode = -1;
-    OutputBufferThread outThread = null;
+    OutputBufferThread stdoutThread = null, stderrThread = null;
     try {
       proc = pb.start();
-      outThread = new OutputBufferThread(proc.getInputStream());
-      outThread.start();
+      stdoutThread = new OutputBufferThread(proc.getInputStream());
+      stderrThread = new OutputBufferThread(proc.getErrorStream());
+      stdoutThread.start();
+      stderrThread.start();
       retCode = proc.waitFor();
       if (retCode != 0) {
         throw new MojoExecutionException("make failed with error code " +
@@ -76,16 +77,25 @@ public class CompileMojo extends AbstractMojo {
     } catch (IOException e) {
       throw new MojoExecutionException("Error executing make", e);
     } finally {
-      if (outThread != null) {
-        outThread.interrupt();
+      if (stdoutThread != null) {
         try {
-          outThread.join();
+          stdoutThread.join();
         } catch (InterruptedException e) {
           e.printStackTrace();
         }
         if (retCode != 0) {
-          outThread.printBufs();
+          stdoutThread.printBufs();
         }
+      }
+      if (stderrThread != null) {
+        try {
+          stderrThread.join();
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        }
+        // We always print stderr, since it contains the compiler warning
+        // messages.  These are interesting even if compilation succeeded.
+        stderrThread.printBufs();
       }
       proc.destroy();
     }
