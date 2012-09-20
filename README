@@ -1,1 +1,18 @@
-Cmake Maven NG is a plugin designed to interface Maven with CMake.
+The CMake build system is often used to build C and C++ code.  Cmake Maven NG
+is a Maven plugin which allows Maven to invoke CMake as part of the build.
+
+CMake Maven NG has many advantages:
+* Works with Java 6 and later
+* Prints compiler warning messages to the Maven stdout
+* Supports native test execution with "mvn test -Dtest="
+* Save the native test error codes, stdout, and stderr to files for later
+inspection.
+* Doesn't rely on the shell, so it is impervious to shell metacharacter issues
+and differing shell versions.
+* Supports "mvn clean"
+
+Currently CMake Maven NG has been tested with GCC on Linux.  We plan to support
+other platforms in the future, including Windows.
+
+For an example project which uses CMake Maven NG, check out 
+http://github.com/cmccabe/cmccabe-maven-ng-test
